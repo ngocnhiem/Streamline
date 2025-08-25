@@ -432,6 +432,13 @@ void destroyContext(Context* ctx)
     ImGui::DestroyContext(g_ctx->imgui);
     ImPlot::DestroyContext(g_ctx->plot);
 
+    if (pluginCtx.cmdList != nullptr)
+    {
+        pluginCtx.cmdList->flushAll();
+        pluginCtx.compute->destroyCommandListContext(pluginCtx.cmdList);
+        pluginCtx.cmdList = nullptr;
+    }
+
     delete g_ctx;
     g_ctx = {};
 

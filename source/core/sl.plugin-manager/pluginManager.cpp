@@ -917,7 +917,7 @@ Result PluginManager::loadPlugins()
         for (Feature f : m_featuresToLoad)
         {
             fs::path pluginPath;
-            if (m_ota->getOTAPluginForFeature(f, m_api, pluginPath))
+            if (m_ota->getOTAPluginForFeature(f, m_api, pluginPath, m_pref.flags & PreferenceFlags::eLoadDownloadedPlugins))
             {
                 SL_LOG_INFO("Found plugin: %ls", pluginPath.c_str());
                 if (f == kFeatureCommon)

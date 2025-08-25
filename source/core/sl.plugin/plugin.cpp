@@ -86,11 +86,13 @@ static bool isLoadingAllowed(const json& loader)
     constexpr uint32_t APP_ID_CALL_OF_DUTY_BLACK_OPS_6              = 0x0623e7c8;
     constexpr uint32_t APP_ID_F1_24                                 = 0x0616fc0b;
     constexpr uint32_t APP_ID_CALL_OF_DUTY_MODERN_WARFARE_III_2023  = 0x061198bf;
+    constexpr uint32_t APP_ID_BF_6_OPEN_BETA                        = 0x06323d82;
 
     static std::unordered_set<uint32_t> disallow_newer_plugins_apps = {
         APP_ID_CALL_OF_DUTY_BLACK_OPS_6,
         APP_ID_F1_24,
-        APP_ID_CALL_OF_DUTY_MODERN_WARFARE_III_2023
+        APP_ID_CALL_OF_DUTY_MODERN_WARFARE_III_2023,
+        APP_ID_BF_6_OPEN_BETA
     };
 
     uint32_t appId = loader.at("appId");

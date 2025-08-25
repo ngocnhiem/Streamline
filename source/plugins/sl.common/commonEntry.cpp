@@ -906,10 +906,17 @@ void allocateNGXBufferCallback(D3D11_BUFFER_DESC* desc, ID3D11Buffer** resource)
         resDesc.heapType = chi::HeapType::eHeapTypeDefault;
     }
 
-    ctx.compute->createBuffer(resDesc, res);
-    
-    *resource = (ID3D11Buffer*)(res->native);
-    delete res;
+    if (sl::chi::ComputeStatus::eOk == ctx.compute->createBuffer(resDesc, res))
+    {
+        *resource = (ID3D11Buffer*)(res->native);
+        delete res;
+    }
+    else
+    {
+        SL_LOG_ERROR("Creating an NGX buffer failed: width=%d", resDesc.width);
+        // make sure to return nullptr to the caller.
+        *resource = nullptr;
+    }
 }
 
 void allocateNGXTex2dCallback(D3D11_TEXTURE2D_DESC* desc, ID3D11Texture2D** resource)
@@ -936,10 +943,17 @@ void allocateNGXTex2dCallback(D3D11_TEXTURE2D_DESC* desc, ID3D11Texture2D** reso
         resDesc.heapType = chi::HeapType::eHeapTypeDefault;
     }
 
-    ctx.compute->createTexture2D(resDesc, res);
-
-    *resource = (ID3D11Texture2D*)(res->native);
-    delete res;
+    if (sl::chi::ComputeStatus::eOk == ctx.compute->createTexture2D(resDesc, res))
+    {
+        *resource = (ID3D11Texture2D*)(res->native);
+        delete res;
+    }
+    else
+    {
+        SL_LOG_ERROR("Creating an NGX 2d texture failed: width=%d, height=%d", resDesc.width, resDesc.height);
+        // make sure to return nullptr to the caller.
+        *resource = nullptr;
+    }
 }
 
 void allocateNGXResourceCallback(D3D12_RESOURCE_DESC* desc, int state, CD3DX12_HEAP_PROPERTIES* heap, ID3D12Resource** resource)
@@ -958,18 +972,27 @@ void allocateNGXResourceCallback(D3D12_RESOURCE_DESC* desc, int state, CD3DX12_H
 
     auto compute = ctx.computeD3D12 ? ctx.computeD3D12 : ctx.compute;
 
+    sl::chi::ComputeStatus status;
     //! Redirecting to host app if allocate callback is specified in sl::Preferences
     if (desc->Dimension == D3D12_RESOURCE_DIMENSION::D3D12_RESOURCE_DIMENSION_BUFFER)
     {
-        compute->createBuffer(resDesc, res);
+        status = compute->createBuffer(resDesc, res);
     }
     else
     {
-        compute->createTexture2D(resDesc, res);
+        status = compute->createTexture2D(resDesc, res);
     }
-
-    *resource = (ID3D12Resource*)(res->native);
-    delete res;
+    if (status == sl::chi::ComputeStatus::eOk)
+    {
+        *resource = (ID3D12Resource*)(res->native);
+        delete res;
+    }
+    else
+    {
+        SL_LOG_ERROR("Creating an NGX resource failed: width=%d, height=%d", resDesc.width, resDesc.height);
+        // make sure to return nullptr to the caller.
+        *resource = nullptr;
+    }
 }
 
 //! Managing deallocations coming from NGX
@@ -1311,7 +1334,8 @@ bool slOnPluginStartup(const char* jsonConfig, void* device)
 
         NVSDK_NGX_Result ngxStatus{};
         
-        if (!engineVersion.empty() && !projectId.empty())
+        bool hasProjectId = !engineVersion.empty() && !projectId.empty();
+        if (hasProjectId)
         {
             // Engine data provided, no need for the application id
             if (deviceType == RenderAPI::eD3D11)
@@ -1385,9 +1409,9 @@ bool slOnPluginStartup(const char* jsonConfig, void* device)
         {
             SL_LOG_HINT("NGX loaded - app id %u - application data path %S", appId, documentsDataPath);
 
-            if (appId == kTemporaryAppId)
+            if (!hasProjectId && appId == kTemporaryAppId)
             {
-                SL_LOG_WARN("Valid application id is required in production builds - allowing for now but please fix this");
+                SL_LOG_WARN("Production builds require a valid application ID or project ID. Please provide one of these to ensure proper operation in production.");
             }
 
             ctx.needNGX = true;
@@ -1458,6 +1482,8 @@ bool slOnPluginStartup(const char* jsonConfig, void* device)
             ctx.drsContext.drsReadKeyFromProfile = drs::drsReadKeyFromProfile;
             ctx.drsContext.drsReadKeyString = drs::drsReadKeyString;
             ctx.drsContext.drsReadKeyStringFromProfile = drs::drsReadKeyStringFromProfile;
+            ctx.drsContext.drsReadKeyFromProfileNoGlobal = drs::drsReadKeyFromProfileNoGlobal;
+            ctx.drsContext.drsReadKeyStringFromProfileNoGlobal = drs::drsReadKeyStringFromProfileNoGlobal;
             parameters->set(param::global::kDRSContext, &ctx.drsContext);
         }
         else

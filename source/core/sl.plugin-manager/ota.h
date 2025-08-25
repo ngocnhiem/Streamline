@@ -21,8 +21,10 @@
 */
 
 #pragma once
-
 #include <filesystem>
+#include <fstream>
+#include <map>
+#include <vector>
 
 #include "include/sl_version.h"
 
@@ -30,6 +32,12 @@ namespace sl
 {
 
 using Feature = uint32_t;
+
+// Used by unit-tests
+namespace test
+{
+class SlOtaParserUnitTest;
+}
 
 namespace ota
 {
@@ -53,7 +61,11 @@ struct IOTA
     //! Return values:
     //!   TRUE - a suitable plugin was found
     //!   FALSE - otherwise
-    virtual bool getOTAPluginForFeature(Feature featureID, const Version &apiVersion, std::filesystem::path &filePath) = 0;
+    virtual bool getOTAPluginForFeature(Feature featureID, const Version &apiVersion, std::filesystem::path &filePath, bool loadOptionalUpdates) = 0;
+
+    private:
+    friend class sl::test::SlOtaParserUnitTest;
+    virtual bool parseServerManifest(std::ifstream &manifest, std::map<std::string, Version> &versionMap, std::vector<std::string> &optionalDownloadPresent) = 0;
 };
 
 IOTA* getInterface();

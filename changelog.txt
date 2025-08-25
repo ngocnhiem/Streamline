@@ -1,3 +1,64 @@
+======== Release 2.9.0 Entries ========
+
+    * Removed support for the following `sl::DLSSPreset` values:
+      - `sl::DLSSPreset::ePresetA`
+      - `sl::DLSSPreset::ePresetB`
+      - `sl::DLSSPreset::ePresetC`
+      - `sl::DLSSPreset::ePresetD`
+      - `sl::DLSSPreset::ePresetE`
+
+    * Removed support for the following `sl::DLSSDPreset` values:
+      - `sl::DLSSDPreset::ePresetA`
+      - `sl::DLSSDPreset::ePresetB`
+      - `sl::DLSSDPreset::ePresetC`
+
+    * Removed support for building with Visual Studio 2017.
+
+    * Updated the `sl::PreferenceFlags::eLoadDownloadedPlugins` flag to control
+      the loading of Optional OTA Updates. The loading of Mandatory OTA Updates
+      is not impacted by this flag.
+
+    * Added `slFreeResources` function to `sl.nis`. See Section 3.0 "TAG ALL
+      REQUIRED RESOURCES" in `ProgrammingGuideNIS.md` for more information.
+
+    * Fixed a bug in `sl.common` where the NGX allocation callbacks where
+      failure to allocate resources would not be properly reported back to the
+      caller.
+
+    * Fixed a bug in `sl.dlss` and `sl.dlss_d` where feature NGX failures during
+      `slEvaluate()` and `slGetData()` were not properly communicated to the
+      application.
+
+    * Fixed a bug in `sl.dlss` and `sl.dlss_d` which could lead to crash if the
+      feature was re-created while GPU work was still in-flight.
+
+    * Fixed a bug in `sl.dlss_g` where references to tagged resources would be
+      kept for 32 frames after their last usage.
+      Reported on GitHub by @simco50 as issue #66
+
+    * Fixed a bug in `sl.dlss_g` which could lead to crashes when feature
+      creation failed. This was most commonly found in scenarios where the
+      swapchain resolution was not supported.
+
+    * Fixed a bug in `sl.dlss_g` which could lead to simultaneous access of
+      swapchain buffers as a result of a GPU timeout during frame presentation.
+
+    * Fixed a bug in `sl.dlss_g` which resulted in high latency when Vertical
+      sync was enabled in the NVIDIA Control Panel.
+
+    * Fixed a bug where `sl.interposer` would incorrectly state that a
+      `sl::Preferences::applicationId` was required despite the application
+      passing in `sl::Preferences::projectId`.
+
+    * Fixed a bug in `sl.deepdvc` where `sl::FeatureVersion::versionNGX` was not set.
+
+    * Fixed a bug in `sl.imgui` where resources would be leaked on `slShutdown()`.
+      Reported on GitHub by @simco50 as issue #59
+
+    * Fixed a bug in `sl_core_types.h` which resulted in compilation failures on clang.
+      Reported on GitHub by @clshortfuse as issue #71
+
+
 ======== Release 2.8.0 Entries ========
 
     * Deprecated support for the following `sl::DLSSPreset` values:
@@ -61,10 +122,10 @@
 
     * Added support for `slSetTagForFrame()` which allows for frame-based
       tagging of resources.
-      See section 2.9 of `ProgrammingGuide.md` "TAGGING RESOURCES" for more inforamtion.
+      See section 2.9 of `ProgrammingGuide.md` "TAGGING RESOURCES" for more information.
 
     * Deprecated support for `slSetTag()`. Use `slSetTagForFrame()` instead.
-      See section 2.9 of `ProgrammingGuide.md` "TAGGING RESOURCES" for more inforamtion.
+      See section 2.9 of `ProgrammingGuide.md` "TAGGING RESOURCES" for more information.
 
     * Added support for an additional DLSS Super Resolution Transformer Model (BETA)
       Available as `sl::DLSSPreset::ePresetK`.
@@ -127,7 +188,7 @@
       `ProgrammingGuideDLSS_G.md` for more information.
 
     * Added a new `sl::DLSSGOptions` field `queueParallelismMode`, see the above
-      changelog entry on `sl::DLSSGQueueParallelismMode for more information.
+      changelog entry on `sl::DLSSGQueueParallelismMode` for more information.
 
     * Added support for overriding Streamline's logging behavior via environment
       variables and Windows registry keys. See the "Logging" section in
@@ -265,7 +326,7 @@
 ======== Release 2.3.0 Entries ========
 
     * Added support for DeepDVC with a new plugin: `sl.deepdvc`.
-      See `ProgrammingGuideDeepDVC.md` for more information see.
+      See `ProgrammingGuideDeepDVC.md` for more information.
 
     * Added a new plugin `sl.pcl` for handling the IHV-agnostic functionality
       previously covered within `sl.reflex`. See `ProgrammingGuidePCL.md` and
@@ -340,7 +401,7 @@
     * Added a new `sl::Constants` field `minRelativeLinearDepthObjectSeparation`
       for describing the minimum depth difference between two objects in screen-space.
 
-    * Added a new structure `sl::PrecsisionInfo` for specifying floating-point
+    * Added a new structure `sl::PrecisionInfo` for specifying floating-point
       precision bias for a `sl::Resource`.
       See section 2.8 "TAGGING RESOURCES" in `ProgrammingGuide.md` for more
       information.

@@ -20,8 +20,9 @@
 * SOFTWARE.
 */
 
+#include <ios>
+#include <fstream>
 #include <sstream>
-
 #include <thread>
 
 #include "source/core/sl.api/internal.h"
@@ -214,13 +215,17 @@ struct OTA : IOTA
     bool getDriverPath(std::wstring &driverPath) const
     {
         WCHAR pathAbsW[MAX_PATH] = {};
-        // DCH driver
-        if(!extra::getRegistryString(L"System\\CurrentControlSet\\Services\\nvlddmkm\\NGXCore", L"NGXPath", pathAbsW, MAX_PATH))
+        // DCH driver + Parameters subkey
+        if(!extra::getRegistryString(L"System\\CurrentControlSet\\Services\\nvlddmkm\\Parameters\\NGXCore", L"NGXPath", pathAbsW, MAX_PATH))
         {
-            // Finally, fall back to legacy location (all nonDCH drivers should have this regkey present)
-            if (!extra::getRegistryString(L"SOFTWARE\\NVIDIA Corporation\\Global\\NGXCore", L"FullPath", pathAbsW, MAX_PATH))
+            // DCH driver
+            if(!extra::getRegistryString(L"System\\CurrentControlSet\\Services\\nvlddmkm\\NGXCore", L"NGXPath", pathAbsW, MAX_PATH))
             {
-                SL_LOG_ERROR("unable to find driver path");
+                // Finally, fall back to legacy location (all nonDCH drivers should have this regkey present)
+                if (!extra::getRegistryString(L"SOFTWARE\\NVIDIA Corporation\\Global\\NGXCore", L"FullPath", pathAbsW, MAX_PATH))
+                {
+                    SL_LOG_ERROR("unable to find driver path");
+                }
             }
         }
 
@@ -240,41 +245,26 @@ struct OTA : IOTA
     // sl_dlss_0 => 3.1.11
     // sl_dlss_g_0 => 3.2.0
     std::map<std::string, Version> m_versions;
+    std::vector<std::string> m_optionalDownloadPresent;
 
-    bool readServerManifest() override
+
+    bool parseServerManifest(std::ifstream &manifest, std::map<std::string, Version> &versionMap, std::vector<std::string> &optionalDownloadPresent) override
     {
-        std::wstring ngxPath;
-        if (!getNGXPath(ngxPath))
-        {
-            SL_LOG_ERROR("Failed to read server manifest, couldn't get NGX Cache Path");
-            return false;
-        }
-        auto manifest = file::open((ngxPath + L"nvngx_config.txt").c_str(), L"rt");
-        if (!manifest)
-        {
-            SL_LOG_WARN("Failed to open manifest file at: %lsnvngx_config.txt", ngxPath.c_str());
-            return false;
-        }
-
-        // Read in lines 256 bytes at at time. The NGX manifest file is quite
-        // narrow and due to the feature name maximum length 256 is sufficient.
-        const size_t BUF_SIZE = 256;
-        char line[BUF_SIZE];
-        while (file::readLine(manifest, line, BUF_SIZE))
+        std::string line;
+        while (std::getline(manifest, line))
         {
             // Search for the sl feature sections, there is only one appid for
             // SL, so parse out the first line available in the section to get
             // the version for the given SL feature
-            std::string tmp(line);
-            auto i = tmp.find("[sl_");
+            auto i = line.find("[sl_");
             if (i != std::string::npos)
             {
-                std::string feature = tmp.substr(4, tmp.size() - 5);
-                file::readLine(manifest, line, BUF_SIZE);
+                std::string feature = line.substr(4, line.size() - 5);
+                std::getline(manifest, line);
                 Version otaVersion;
-                if (sscanf_s(line, "app" NGX_OTA_CMS_ID_0_HASH " = %d.%d.%d", &otaVersion.major, &otaVersion.minor, &otaVersion.build) == 3)
+                if (sscanf_s(line.c_str(), "app" NGX_OTA_CMS_ID_0_HASH " = %d.%d.%d", &otaVersion.major, &otaVersion.minor, &otaVersion.build) == 3)
                 {
-                    m_versions[feature] = otaVersion;
+                    versionMap[feature] = otaVersion;
                     SL_LOG_VERBOSE("OTA feature %s version %s", feature.c_str(), otaVersion.toStr().c_str());
                 }
                 else
@@ -282,10 +272,44 @@ struct OTA : IOTA
                     SL_LOG_ERROR("Unexpected line in manifest file: %s", line);
                 }
             }
-        }
 
-        file::close(manifest);
+            // Search for the [optional_update_present] section, there can be
+            // multiple entries under this section, and other sections can trail
+            // it.
+            i = line.find("[optional_update_present]");
+            if (i != std::string::npos)
+            {
+                // NGX defines NV_OTA_MAX_FTR_LEN as 50, so allocate space for
+                // that and a NUL-byte.
+                char featureString[51];
+                std::getline(manifest, line);
+                while(sscanf_s(line.c_str(), "app" NGX_OTA_CMS_ID_0_HASH "_sl_%50s = 1", &featureString, (uint32_t)sizeof(featureString)) == 1)
+                {
+                    SL_LOG_VERBOSE("OTA feature %s is an optional download", featureString);
+                    optionalDownloadPresent.emplace_back(featureString);
+                    std::getline(manifest, line);
+                }
+            }
+        }
         return true;
+    }
+
+    bool readServerManifest() override
+    {
+        bool succeeded = false;
+        std::wstring ngxPath;
+        if (!getNGXPath(ngxPath))
+        {
+            SL_LOG_ERROR("Failed to read server manifest, couldn't get NGX Cache Path");
+            return succeeded;
+        }
+        std::ifstream manifestFile(ngxPath + L"nvngx_config.txt");
+        if (!manifestFile.is_open() || (manifestFile.rdstate() != std::ios_base::goodbit))
+        {
+            SL_LOG_WARN("Failed to open manifest file at: %lsnvngx_config.txt", ngxPath.c_str());
+            return succeeded;
+        }
+        return parseServerManifest(manifestFile, m_versions, m_optionalDownloadPresent);
     }
 
     uint32_t getNVDAVersion()
@@ -396,7 +420,7 @@ struct OTA : IOTA
         return true;
     }
 
-    bool getOTAPluginForFeature(Feature featureID, const Version &apiVersion, std::filesystem::path &filePath) override
+    bool getOTAPluginForFeature(Feature featureID, const Version &apiVersion, std::filesystem::path &filePath, bool loadOptionalUpdates) override
     {
         // First get GPU Architecture, needed to download appropriate OTA
         // snippet
@@ -429,6 +453,32 @@ struct OTA : IOTA
         else
         {
             otaVersion = it->second;
+        }
+
+        // If optional updates are not allowed, check if this feature is
+        // optional and skip it
+        if (!loadOptionalUpdates)
+        {
+            uint32_t driverVersion = getNVDAVersion();
+
+            // Support for optional update tracking was added in R580 and later.
+            // If we are on a driver prior to that we cannot infer whether a
+            // downloaded feature was optional or mandatory and thus need to
+            // assume it was optional and not load it.
+            if (driverVersion < 58000)
+            {
+                SL_LOG_INFO("eLoadDownloadedPlugins flag not passed to preferences, unable to infer if %s plugin is optional due to driver version. Skipping!", name_version);
+                return false;
+            }
+            for (const auto &entry: m_optionalDownloadPresent)
+            {
+                if (entry == name_version)
+                {
+                    // Version is marked as optional
+                    SL_LOG_INFO("eLoadDownloadedPlugins flag not passed to preferences, optional %s plugin will not be loaded!", name_version);
+                    return false;
+                }
+            }
         }
 
         // Any real Plugin will have a non-zero version, if we hit the

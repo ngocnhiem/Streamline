@@ -115,7 +115,6 @@ public:
             }
 
             // Wait for next frame.
-            SL_LOG_WARN("Camera data for frame %d was not readily available, this should not happen often!", frameID);
             {
                 std::unique_lock<std::mutex> lock(framesMutex);
 
